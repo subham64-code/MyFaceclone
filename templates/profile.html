@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="layout-grid profile-grid">
+  <aside class="glass card slide-up">
+    {% if is_own_profile %}
+      <h3>Edit profile</h3>
+      <form method="post" action="{% url 'update' %}" enctype="multipart/form-data" class="form-grid">
+        {% csrf_token %}
+        <input type="text" name="status" placeholder="Status" value="{{ request.user.userprofile.bio }}">
+        <input type="text" name="location" placeholder="Location" value="{{ request.user.userprofile.loc }}">
+        <select name="country">
+          <option value="">Choose your country</option>
+          {% for code, country in country_choices %}
+            <option value="{{ code }}" {% if request.user.userprofile.country == code %}selected{% endif %}>{{ country }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="education" placeholder="Education" value="{{ request.user.userprofile.education }}">
+        <input type="text" name="work" placeholder="Work" value="{{ request.user.userprofile.work }}">
+        <input type="file" name="avatar" accept="image/*">
+        <input type="file" name="cover" accept="image/*">
+        <label class="muted"><input type="checkbox" name="is_private" {% if request.user.userprofile.is_private %}checked{% endif %}> Private account</label>
+        <button class="btn btn-primary" type="submit">Save profile</button>
+      </form>
+    {% else %}
+      <h3>Connection</h3>
+      <a class="btn btn-secondary" href="{% url 'toggle-follow' target_user.username %}">{% if is_following %}Unfollow{% else %}Follow{% endif %}</a>
+      <a class="btn btn-danger" href="{% url 'toggle-block' target_user.username %}">Block</a>
+      {% if friendship %}
+        {% if friendship.status == 'accepted' %}
+          <a class="btn btn-danger" href="{% url 'unfriend' target_user.username %}">Unfriend</a>
+          <a class="btn btn-ghost" href="{% url 'chat' %}?with={{ target_user.username }}">Message</a>
+        {% else %}
+          <p class="muted">Friend request pending.</p>
+        {% endif %}
+      {% else %}
+        <a class="btn btn-secondary" href="{% url 'send-friend-request' target_user.username %}">Add friend</a>
+      {% endif %}
+    {% endif %}
+  </aside>
+
+  <section>
+    <div class="glass card slide-up stagger-1">
+      <img class="cover-photo" src="{{ target_user.userprofile.cover_img.url }}" alt="cover image" onerror="this.src='{{ target_user.userprofile.img.url }}'">
+      <div class="profile-head">
+        <img class="avatar" src="{{ target_user.userprofile.img.url }}" alt="avatar">
+        <div>
+          <h2>@{{ target_user.username }}</h2>
+          <p>{{ target_user.userprofile.bio|default:"No status yet" }}</p>
+          <p class="muted">{{ target_user.userprofile.loc|default:"No location" }}{% if target_user.userprofile.country %} • {{ target_user.userprofile.get_country_display }}{% endif %} • {{ friend_count }} friends</p>
+          <p class="muted">{{ followers }} followers • {{ following }} following</p>
+          <p class="muted">{{ target_user.userprofile.education|default:"" }}{% if target_user.userprofile.education and target_user.userprofile.work %} • {% endif %}{{ target_user.userprofile.work|default:"" }}</p>
+        </div>
+      </div>
+    </div>
+
+    {% for post in posts %}
+      <article class="glass card slide-up post-card">
+        <div class="post-head">
+          <a href="{% url 'profile-user' post.user.username %}">@{{ post.user.username }}</a>
+          <span class="muted">{{ post.date|date:'M d, Y H:i' }}</span>
+        </div>
+        {% if post.post %}<p>{{ post.post }}</p>{% endif %}
+        {% if post.image %}<img class="post-image" src="{{ post.image.url }}" alt="post image">{% endif %}
+
+        <div class="post-actions">
+          <a class="chip {% if post.id in liked_post_ids %}ok{% endif %}" href="{% url 'toggle-like' post.id %}">
+            {% if post.id in liked_post_ids %}Unlike{% else %}Like{% endif %} ({{ post.likes.count }})
+          </a>
+          {% if post.user == request.user %}
+            <a class="chip danger" href="{% url 'delete-post' post.id %}">Delete</a>
+          {% endif %}
+        </div>
+
+        <div class="comments">
+          {% for comment in post.comments.all %}
+            <p><strong>@{{ comment.user.username }}</strong> {{ comment.text }}</p>
+          {% empty %}
+            <p class="muted">No comments yet.</p>
+          {% endfor %}
+        </div>
+
+        <form method="post" action="{% url 'add-comment' post.id %}" class="comment-row">
+          {% csrf_token %}
+          <input type="text" name="comment" maxlength="280" placeholder="Write a comment" required>
+          <button class="btn btn-ghost" type="submit">Send</button>
+        </form>
+      </article>
+    {% empty %}
+      <div class="glass card"><p class="muted">No timeline posts yet.</p></div>
+    {% endfor %}
+  </section>
+
+  <aside class="glass card slide-up stagger-2">
+    <h4>Quick links</h4>
+    <a class="chip" href="{% url 'home' %}">Back to feed</a>
+    <a class="chip" href="{% url 'chat' %}">Open messages</a>
+  </aside>
+</div>
+{% endblock %}

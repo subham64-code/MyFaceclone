@@ -1,0 +1,51 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyFaceclone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body data-theme="{% if request.user.is_authenticated %}{{ request.user.userprofile.theme }}{% else %}light{% endif %}">
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-grid"></div>
+
+  <header class="topbar glass">
+    <div class="container topbar-inner">
+      <a class="brand" href="{% url 'home' %}">myfaceclone</a>
+      {% if request.user.is_authenticated %}
+      <nav class="topnav">
+        <a href="{% url 'home' %}">Feed</a>
+        <a href="{% url 'explore' %}">Explore</a>
+        <a href="{% url 'reels' %}">Reels</a>
+        <a href="{% url 'profile' %}">Profile</a>
+        <a href="{% url 'chat' %}">Messages</a>
+        <a href="{% url 'saved-posts' %}">Saved</a>
+        <a href="{% url 'notifications' %}">Alerts{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</a>
+        <a href="{% url 'toggle-theme' %}">Theme</a>
+        <a href="{% url 'logout' %}">Logout</a>
+      </nav>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="container page fade-in">
+    {% if messages %}
+      <div class="alerts">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{% static 'js/script.js' %}"></script>
+</body>
+</html>

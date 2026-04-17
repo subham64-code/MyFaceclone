@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="auth-wrap">
+  <div class="glass hero-card slide-up">
+    <p class="eyebrow">social network</p>
+    <h1>Build your world on MyFaceclone</h1>
+    <p>Share updates, like posts, comment with friends, and chat instantly in one place.</p>
+    <ul class="feature-list">
+      <li>Personalized feed</li>
+      <li>Friend requests and profiles</li>
+      <li>Likes, comments, and direct messages</li>
+    </ul>
+  </div>
+
+  <div class="auth-grid">
+    <div class="glass card slide-up stagger-1">
+      <h2>Login</h2>
+      <form method="post" action="{% url 'index' %}" class="form-grid">
+        {% csrf_token %}
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button class="btn btn-primary" type="submit">Sign in</button>
+      </form>
+    </div>
+
+    <div class="glass card slide-up stagger-2">
+      <h2>Create account</h2>
+      <form method="post" action="{% url 'register' %}" class="form-grid">
+        {% csrf_token %}
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="text" name="location" placeholder="City or region">
+        <select name="country" required>
+          <option value="">Choose your country</option>
+          {% for code, country in country_choices %}
+            <option value="{{ code }}">{{ country }}</option>
+          {% endfor %}
+        </select>
+        <input type="password" name="password" placeholder="Password" required>
+        <button class="btn btn-secondary" type="submit">Register</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

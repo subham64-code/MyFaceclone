@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    command: daphne -b 0.0.0.0 -p 8000 MyFaceclone.asgi:application
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - turn
+    environment:
+      DJANGO_SETTINGS_MODULE: MyFaceclone.settings
+      POSTGRES_DB: myfaceclone
+      POSTGRES_USER: myfaceclone
+      POSTGRES_PASSWORD: myfaceclone
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      WEBRTC_STUN_URL: stun:stun.l.google.com:19302
+      WEBRTC_TURN_URL: turn:127.0.0.1:3478?transport=udp
+      WEBRTC_TURN_USERNAME: myface
+      WEBRTC_TURN_CREDENTIAL: myfacepass
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: myfaceclone
+      POSTGRES_USER: myfaceclone
+      POSTGRES_PASSWORD: myfaceclone
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  redis:
+    image: redis:7
+
+  turn:
+    image: coturn/coturn:4.6
+    command:
+      - -n
+      - --log-file=stdout
+      - --min-port=49160
+      - --max-port=49200
+      - --realm=myface.local
+      - --user=myface:myfacepass
+      - --external-ip=127.0.0.1
+      - --lt-cred-mech
+      - --fingerprint
+      - --no-cli
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+
+volumes:
+  pgdata:

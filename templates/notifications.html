@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="glass card slide-up">
+  <div class="mini-row">
+    <h2>Notifications</h2>
+    <a class="btn btn-ghost" href="{% url 'notifications-read' %}">Mark all read</a>
+  </div>
+
+  <div class="result-list" id="notif-list">
+    {% for notif in notifications %}
+      <article class="glass card {% if not notif.is_read %}notif-unread{% endif %}">
+        <div class="mini-row">
+          <p><strong>@{{ notif.actor.username }}</strong> {{ notif.text }}</p>
+          <span class="muted">{{ notif.created_at|date:'M d, H:i' }}</span>
+        </div>
+        {% if notif.link %}
+          <a class="chip" href="{{ notif.link }}">Open</a>
+        {% endif %}
+      </article>
+    {% empty %}
+      <p class="muted">No notifications yet.</p>
+    {% endfor %}
+  </div>
+</section>
+<script>
+  (function () {
+    const list = document.getElementById('notif-list');
+    if (!list) return;
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${scheme}://${window.location.host}/ws/notifications/`);
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type !== 'notification') return;
+
+      const payload = data.payload;
+      const card = document.createElement('article');
+      card.className = 'glass card notif-unread';
+
+      const row = document.createElement('div');
+      row.className = 'mini-row';
+
+      const text = document.createElement('p');
+      text.innerHTML = `<strong>@${payload.actor}</strong> ${payload.text}`;
+      row.appendChild(text);
+
+      const stamp = document.createElement('span');
+      stamp.className = 'muted';
+      stamp.textContent = 'just now';
+      row.appendChild(stamp);
+
+      card.appendChild(row);
+
+      if (payload.link) {
+        const link = document.createElement('a');
+        link.className = 'chip';
+        link.href = payload.link;
+        link.textContent = 'Open';
+        card.appendChild(link);
+      }
+
+      list.prepend(card);
+    };
+  })();
+</script>
+{% endblock %}

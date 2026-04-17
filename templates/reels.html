@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="reels-wrap slide-up">
+  <h2>Reels</h2>
+  <p class="muted">Vertical scrolling video feed inspired by Instagram Reels.</p>
+
+  <div class="reel-list">
+    {% for reel in reels_posts %}
+      <article class="reel-card glass card">
+        <header class="post-head">
+          <a href="{% url 'profile-user' reel.user.username %}">@{{ reel.user.username }}</a>
+          <span class="muted">{{ reel.date|date:'M d, H:i' }}</span>
+        </header>
+        <video class="reel-video" src="{{ reel.video.url }}" controls muted loop playsinline></video>
+        {% if reel.post %}<p>{{ reel.post }}</p>{% endif %}
+        <div class="post-actions">
+          <a class="chip" href="{% url 'toggle-like' reel.id %}">Like ({{ reel.likes.count }})</a>
+          <a class="chip" href="{% url 'toggle-save-post' reel.id %}">Save</a>
+        </div>
+      </article>
+    {% empty %}
+      <div class="glass card">
+        <p class="muted">No reels yet. Upload a video post and it appears here.</p>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="glass card slide-up">
+  <h2>Explore</h2>
+  <p class="muted">Instagram-style discovery feed with trending tags.</p>
+
+  <div class="tag-cloud">
+    {% for tag, count in trending_tags %}
+      <span class="chip">{{ tag }} ({{ count }})</span>
+    {% empty %}
+      <p class="muted">No trending tags yet.</p>
+    {% endfor %}
+  </div>
+
+  <div class="explore-grid">
+    {% for post in posts %}
+      <article class="glass card post-card">
+        <div class="post-head">
+          <a href="{% url 'profile-user' post.user.username %}">@{{ post.user.username }}</a>
+          <span class="muted">{{ post.date|date:'M d, H:i' }}</span>
+        </div>
+        {% if post.image %}<img class="post-image" src="{{ post.image.url }}" alt="explore image">{% endif %}
+        {% if post.video %}<video class="post-image" controls muted src="{{ post.video.url }}"></video>{% endif %}
+        {% if post.post %}<p>{{ post.post }}</p>{% endif %}
+        <div class="post-actions">
+          <a class="chip" href="{% url 'toggle-like' post.id %}">Like ({{ post.likes.count }})</a>
+          <span class="chip">Comments ({{ post.comments.count }})</span>
+        </div>
+      </article>
+    {% empty %}
+      <p class="muted">No posts available for explore.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

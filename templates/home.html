@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="layout-grid">
+  <aside class="glass card slide-up">
+    <h3>{{ request.user.username }}</h3>
+    <p class="muted">{{ request.user.userprofile.bio|default:"No status yet" }}</p>
+    <p class="muted">{{ request.user.userprofile.loc|default:"No location set" }}{% if request.user.userprofile.country %} • {{ request.user.userprofile.get_country_display }}{% endif %}</p>
+    <div class="stat">{{ friend_count }} friends</div>
+    <div class="safety-banner">
+      <div>
+        <strong>Security mode</strong>
+        <span class="muted">Rate limits and content checks are active.</span>
+      </div>
+      <span class="chip security-chip">Protected</span>
+    </div>
+
+    <h4>Add story</h4>
+    <form method="post" action="{% url 'create-story' %}" enctype="multipart/form-data" class="form-grid">
+      {% csrf_token %}
+      <input type="file" name="story_image" accept="image/*">
+      <input type="file" name="story_video" accept="video/*">
+      <input type="text" name="caption" placeholder="Story caption">
+      <button class="btn btn-ghost" type="submit">Publish story</button>
+    </form>
+
+    <h4>Friend requests</h4>
+    {% for req in pending_requests %}
+      <div class="mini-row">
+        <a href="{% url 'profile-user' req.from_user.username %}">@{{ req.from_user.username }}</a>
+        <div class="mini-actions">
+          <a class="chip ok" href="{% url 'respond-friend-request' req.id 'accept' %}">Accept</a>
+          <a class="chip danger" href="{% url 'respond-friend-request' req.id 'decline' %}">Decline</a>
+        </div>
+      </div>
+    {% empty %}
+      <p class="muted">No pending requests.</p>
+    {% endfor %}
+  </aside>
+
+  <section>
+    <div class="glass card slide-up stagger-1">
+      <form method="get" action="{% url 'home' %}" class="search-row">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search people">
+        <button class="btn btn-ghost" type="submit">Search</button>
+      </form>
+      {% if query %}
+      <div class="result-list">
+        {% for person in search_results %}
+          <div class="mini-row">
+            <a href="{% url 'profile-user' person.username %}">@{{ person.username }}</a>
+            <a class="chip" href="{% url 'send-friend-request' person.username %}">Add friend</a>
+          </div>
+        {% empty %}
+          <p class="muted">No users found.</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="glass card slide-up stagger-2">
+      <h3>Create post</h3>
+      <form method="post" action="{% url 'addpost' %}" enctype="multipart/form-data" class="form-grid">
+        {% csrf_token %}
+        <textarea name="content" rows="3" placeholder="What is happening?"></textarea>
+        <input type="file" name="post_image" accept="image/*">
+        <input type="file" name="post_video" accept="video/*">
+        <select name="visibility">
+          <option value="public">Public</option>
+          <option value="friends">Friends</option>
+          <option value="private">Only me</option>
+        </select>
+        <button class="btn btn-primary" type="submit">Post now</button>
+      </form>
+    </div>
+
+    {% if stories %}
+      <div class="glass card slide-up story-row">
+        <h3>Stories</h3>
+        <div class="story-list">
+          {% for story in stories %}
+            <div class="story-item">
+              <p><strong>@{{ story.user.username }}</strong></p>
+              {% if story.image %}<img class="story-media" src="{{ story.image.url }}" alt="story image">{% endif %}
+              {% if story.video %}<video class="story-media" controls muted src="{{ story.video.url }}"></video>{% endif %}
+              {% if story.caption %}<p class="muted">{{ story.caption }}</p>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% for post in posts %}
+      <article class="glass card slide-up post-card">
+        <div class="post-head">
+          <a href="{% url 'profile-user' post.user.username %}">@{{ post.user.username }}</a>
+          <span class="muted">{{ post.date|date:'M d, Y H:i' }}</span>
+        </div>
+        {% if post.post %}<p>{{ post.post }}</p>{% endif %}
+        {% if post.image %}
+          <img class="post-image" src="{{ post.image.url }}" alt="Post image">
+        {% endif %}
+        {% if post.video %}
+          <video class="post-image" controls muted src="{{ post.video.url }}"></video>
+        {% endif %}
+
+        <div class="post-actions">
+          <a class="chip {% if post.id in liked_post_ids %}ok{% endif %}" href="{% url 'toggle-like' post.id %}">
+            {% if post.id in liked_post_ids %}Unlike{% else %}Like{% endif %} ({{ post.likes.count }})
+          </a>
+          <a class="chip {% if post.id in saved_post_ids %}ok{% endif %}" href="{% url 'toggle-save-post' post.id %}">
+            {% if post.id in saved_post_ids %}Saved{% else %}Save{% endif %}
+          </a>
+          {% if post.user == request.user %}
+            <a class="chip danger" href="{% url 'delete-post' post.id %}">Delete</a>
+          {% endif %}
+        </div>
+
+        <div class="comments">
+          {% for comment in post.comments.all %}
+            <p><strong>@{{ comment.user.username }}</strong> {{ comment.text }}</p>
+          {% empty %}
+            <p class="muted">Be the first to comment.</p>
+          {% endfor %}
+        </div>
+
+        <form method="post" action="{% url 'add-comment' post.id %}" class="comment-row">
+          {% csrf_token %}
+          <input type="text" name="comment" placeholder="Write a comment" maxlength="280" required>
+          <button class="btn btn-ghost" type="submit">Send</button>
+        </form>
+      </article>
+    {% empty %}
+      <div class="glass card">
+        <p class="muted">No posts yet. Add friends and create your first post.</p>
+      </div>
+    {% endfor %}
+  </section>
+
+  <aside class="glass card slide-up stagger-1">
+    <h4>People you may know</h4>
+    {% for person in suggestions %}
+      {% if person.username %}
+      <div class="mini-row">
+        <a href="{% url 'profile-user' person.username %}">@{{ person.username }}</a>
+        <div class="mini-actions">
+          <a class="chip" href="{% url 'send-friend-request' person.username %}">Add</a>
+          <a class="chip {% if person.id in following_ids %}ok{% endif %}" href="{% url 'toggle-follow' person.username %}">
+            {% if person.id in following_ids %}Following{% else %}Follow{% endif %}
+          </a>
+          <a class="chip danger" href="{% url 'toggle-block' person.username %}">Block</a>
+        </div>
+      </div>
+      {% endif %}
+    {% empty %}
+      <p class="muted">No suggestions for now.</p>
+    {% endfor %}
+
+    <div class="recommendation-panel">
+      <h4>AI recommendations</h4>
+      <p class="muted">Ranked from your follows, likes, and comments.</p>
+      {% for person in ai_people %}
+        <div class="mini-row">
+          <div>
+            <a href="{% url 'profile-user' person.username %}">@{{ person.username }}</a>
+            <p class="muted">{{ person.recommendation_reason }}</p>
+          </div>
+          <span class="chip ok">Recommended</span>
+        </div>
+      {% empty %}
+        <p class="muted">Keep engaging to improve recommendations.</p>
+      {% endfor %}
+    </div>
+  </aside>
+</div>
+
+<section class="glass card recommendation-strip slide-up">
+  <div class="section-head">
+    <h3>For you</h3>
+    <span class="chip ok">AI ranked</span>
+  </div>
+  <div class="recommendation-feed">
+    {% for post in ai_posts %}
+      <article class="recommendation-card">
+        <div class="post-head">
+          <a href="{% url 'profile-user' post.user.username %}">@{{ post.user.username }}</a>
+          <span class="muted">{{ post.date|date:'M d, Y H:i' }}</span>
+        </div>
+        <p>{{ post.post|truncatechars:180 }}</p>
+        <p class="muted">{{ post.recommendation_reason }}</p>
+        {% if post.image %}<img class="post-image" src="{{ post.image.url }}" alt="Recommended post image">{% endif %}
+        {% if post.video %}<video class="post-image" controls muted src="{{ post.video.url }}"></video>{% endif %}
+      </article>
+    {% empty %}
+      <p class="muted">No personalized recommendations yet.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="chat-shell glass card slide-up">
+  <aside class="chat-list">
+    <h3>Messages</h3>
+    <h4 class="muted">Direct</h4>
+    {% for peer in peers %}
+      <a class="chat-user {% if selected_user and selected_user.id == peer.id %}active{% endif %}" href="{% url 'chat' %}?with={{ peer.username }}">
+        @{{ peer.username }}
+      </a>
+    {% empty %}
+      <p class="muted">Add and accept friends to start chatting.</p>
+    {% endfor %}
+
+    <h4 class="muted">Groups</h4>
+    {% for grp in groups %}
+      <a class="chat-user" href="{% url 'group-chat' grp.id %}"># {{ grp.name }}</a>
+    {% empty %}
+      <p class="muted">No groups yet.</p>
+    {% endfor %}
+
+    <form method="post" action="{% url 'create-group' %}" class="form-grid">
+      {% csrf_token %}
+      <input type="text" name="name" placeholder="Group name" required>
+      <input type="text" name="usernames" placeholder="Members: user1,user2">
+      <button class="btn btn-ghost" type="submit">Create group</button>
+    </form>
+  </aside>
+
+  <section class="chat-main">
+    {% if selected_user %}
+      <header class="chat-header chat-header-actions">
+        <span>
+          Chat with @{{ selected_user.username }}
+          <small id="presence-pill" class="presence-pill" data-last-seen="{{ selected_user_last_seen }}">
+            offline{% if selected_user_last_seen %} · last seen {{ selected_user_last_seen }}{% endif %}
+          </small>
+        </span>
+        <button type="button" class="btn btn-ghost" id="start-call-btn">Start Call</button>
+      </header>
+
+      <div class="chat-thread" data-chat-thread data-current-user="{{ request.user.username }}" data-peer-user="{{ selected_user.username }}">
+        {% for msg in conversation %}
+          <div class="bubble {% if msg.sender_id == request.user.id %}me{% else %}them{% endif %}" {% if msg.sender_id == request.user.id %}data-msg-id="{{ msg.id }}"{% endif %}>
+            {% if msg.body %}<p>{{ msg.body }}</p>{% endif %}
+            {% if msg.attachment %}
+              <a class="chip" href="{{ msg.attachment.url }}" target="_blank">Open attachment</a>
+            {% endif %}
+            <span class="msg-meta" {% if msg.sender_id == request.user.id %}data-msg-status-id="{{ msg.id }}"{% endif %}>
+              {{ msg.created_at|date:'M d, H:i' }}
+              {% if msg.sender_id == request.user.id %}
+                {% if msg.is_read %} • Read{% else %} • Sent{% endif %}
+              {% endif %}
+            </span>
+          </div>
+        {% empty %}
+          <p class="muted">No messages yet. Start the conversation.</p>
+        {% endfor %}
+      </div>
+      <p class="muted" id="typing-indicator" style="display:none;"></p>
+
+      <form method="post" action="{% url 'send-message' %}" class="chat-form chat-form-extended" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="username" value="{{ selected_user.username }}">
+        <input type="text" name="body" maxlength="1000" placeholder="Write a message">
+        <input type="file" name="attachment" accept="image/*,video/*,application/pdf">
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>
+      <div id="call-modal" class="call-modal" style="display:none;">
+        <div class="call-modal-inner glass">
+          <div class="mini-row">
+            <strong>Live Call with @{{ selected_user.username }}</strong>
+            <button type="button" class="btn btn-danger" id="end-call-btn">End</button>
+          </div>
+          <div class="call-grid">
+            <video id="remote-video" autoplay playsinline></video>
+            <video id="local-video" autoplay playsinline muted></video>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const thread = document.querySelector('[data-chat-thread]');
+          if (!thread) return;
+
+          const currentUser = thread.dataset.currentUser;
+          const peerUser = thread.dataset.peerUser;
+          const form = document.querySelector('form[action="{% url 'send-message' %}"]');
+          const input = form.querySelector('input[name="body"]');
+          const fileInput = form.querySelector('input[name="attachment"]');
+          const typingIndicator = document.getElementById('typing-indicator');
+          const presencePill = document.getElementById('presence-pill');
+          const callModal = document.getElementById('call-modal');
+          const startCallBtn = document.getElementById('start-call-btn');
+          const endCallBtn = document.getElementById('end-call-btn');
+          const localVideo = document.getElementById('local-video');
+          const remoteVideo = document.getElementById('remote-video');
+
+          const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+          const socket = new WebSocket(`${scheme}://${window.location.host}/ws/chat/${peerUser}/`);
+          const presenceSocket = new WebSocket(`${scheme}://${window.location.host}/ws/presence/`);
+
+          const callRoom = [currentUser, peerUser].sort().join('__').replaceAll(' ', '_');
+          const callSocket = new WebSocket(`${scheme}://${window.location.host}/ws/call/${encodeURIComponent(callRoom)}/`);
+
+          let peerConnection = null;
+          let localStream = null;
+          let typingTimeout = null;
+
+          const rtcConfig = {
+            iceServers: {{ webrtc_ice_servers_json|safe }},
+          };
+
+          const ensureCallPeer = async () => {
+            if (peerConnection) return;
+            peerConnection = new RTCPeerConnection(rtcConfig);
+            peerConnection.onicecandidate = (event) => {
+              if (event.candidate && callSocket.readyState === WebSocket.OPEN) {
+                callSocket.send(JSON.stringify({ type: 'ice', candidate: event.candidate }));
+              }
+            };
+            peerConnection.ontrack = (event) => {
+              remoteVideo.srcObject = event.streams[0];
+            };
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localVideo.srcObject = localStream;
+            localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
+          };
+
+          const stopCall = () => {
+            if (peerConnection) {
+              peerConnection.close();
+              peerConnection = null;
+            }
+            if (localStream) {
+              localStream.getTracks().forEach((t) => t.stop());
+              localStream = null;
+            }
+            remoteVideo.srcObject = null;
+            localVideo.srcObject = null;
+            callModal.style.display = 'none';
+          };
+
+          const addBubble = (msg) => {
+            const wrap = document.createElement('div');
+            const isMe = msg.sender === currentUser;
+            wrap.className = `bubble ${isMe ? 'me' : 'them'}`;
+
+            if (msg.body) {
+              const p = document.createElement('p');
+              p.textContent = msg.body;
+              wrap.appendChild(p);
+            }
+
+            if (msg.attachment) {
+              const a = document.createElement('a');
+              a.className = 'chip';
+              a.href = msg.attachment;
+              a.target = '_blank';
+              a.textContent = 'Open attachment';
+              wrap.appendChild(a);
+            }
+
+            const meta = document.createElement('span');
+            meta.className = 'msg-meta';
+            if (isMe && msg.id) {
+              wrap.dataset.msgId = msg.id;
+              meta.dataset.msgStatusId = msg.id;
+            }
+            meta.textContent = msg.created_at;
+            wrap.appendChild(meta);
+            thread.appendChild(wrap);
+            thread.scrollTop = thread.scrollHeight;
+
+            if (!isMe && msg.id && socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({ type: 'read', message_id: msg.id }));
+            }
+          };
+
+          presenceSocket.onopen = () => {
+            presenceSocket.send(JSON.stringify({ type: 'snapshot' }));
+            presenceSocket.send(JSON.stringify({ type: 'heartbeat' }));
+          };
+
+          const presenceHeartbeat = setInterval(() => {
+            if (presenceSocket.readyState === WebSocket.OPEN) {
+              presenceSocket.send(JSON.stringify({ type: 'heartbeat' }));
+            }
+          }, 30000);
+
+          presenceSocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'presence_snapshot') {
+              if (data.users.includes(peerUser)) {
+                presencePill.textContent = 'online';
+                presencePill.classList.add('online');
+              } else {
+                const lastSeen = presencePill.dataset.lastSeen;
+                presencePill.textContent = lastSeen ? `offline · last seen ${lastSeen}` : 'offline';
+                presencePill.classList.remove('online');
+              }
+            }
+            if (data.type === 'presence' && data.username === peerUser) {
+              const online = data.status === 'online';
+              if (online) {
+                presencePill.textContent = 'online';
+              } else {
+                const lastSeen = data.last_seen || presencePill.dataset.lastSeen;
+                if (lastSeen) {
+                  presencePill.dataset.lastSeen = lastSeen;
+                }
+                presencePill.textContent = lastSeen ? `offline · last seen ${lastSeen}` : 'offline';
+              }
+              presencePill.classList.toggle('online', online);
+            }
+          };
+
+          socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'typing') {
+              if (data.username !== currentUser && data.is_typing) {
+                typingIndicator.style.display = 'block';
+                typingIndicator.textContent = `@${data.username} is typing...`;
+              } else {
+                typingIndicator.style.display = 'none';
+              }
+            }
+            if (data.type === 'receipt') {
+              const statusEl = thread.querySelector(`[data-msg-status-id="${data.message_id}"]`);
+              if (statusEl) {
+                const currentText = statusEl.textContent.split(' • ')[0];
+                statusEl.textContent = `${currentText} • Read`;
+              }
+            }
+            if (data.type === 'message' && data.message.sender !== currentUser) {
+              addBubble(data.message);
+            }
+          };
+
+          startCallBtn.addEventListener('click', async () => {
+            if (callSocket.readyState !== WebSocket.OPEN) return;
+            callModal.style.display = 'grid';
+            await ensureCallPeer();
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            callSocket.send(JSON.stringify({ type: 'offer', sdp: offer }));
+          });
+
+          endCallBtn.addEventListener('click', () => {
+            if (callSocket.readyState === WebSocket.OPEN) {
+              callSocket.send(JSON.stringify({ type: 'hangup' }));
+            }
+            stopCall();
+          });
+
+          callSocket.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type !== 'call' || data.sender === currentUser) return;
+
+            const payload = data.payload;
+            if (payload.type === 'offer') {
+              callModal.style.display = 'grid';
+              await ensureCallPeer();
+              await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+              const answer = await peerConnection.createAnswer();
+              await peerConnection.setLocalDescription(answer);
+              callSocket.send(JSON.stringify({ type: 'answer', sdp: answer }));
+            }
+
+            if (payload.type === 'answer' && peerConnection) {
+              await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            }
+
+            if (payload.type === 'ice' && peerConnection && payload.candidate) {
+              try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
+              } catch (err) {
+                console.error('ICE candidate error', err);
+              }
+            }
+
+            if (payload.type === 'hangup') {
+              stopCall();
+            }
+          };
+
+          input.addEventListener('input', () => {
+            if (socket.readyState !== WebSocket.OPEN) return;
+            socket.send(JSON.stringify({ type: 'typing', is_typing: true }));
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+              socket.send(JSON.stringify({ type: 'typing', is_typing: false }));
+            }, 900);
+          });
+
+          form.addEventListener('submit', (e) => {
+            if (fileInput.files.length > 0) {
+              return;
+            }
+            const body = input.value.trim();
+            if (!body || socket.readyState !== WebSocket.OPEN) {
+              return;
+            }
+            e.preventDefault();
+            socket.send(JSON.stringify({ type: 'message', body }));
+            addBubble({ sender: currentUser, body, created_at: 'now' });
+            input.value = '';
+            socket.send(JSON.stringify({ type: 'typing', is_typing: false }));
+          });
+
+          window.addEventListener('beforeunload', () => {
+            clearInterval(presenceHeartbeat);
+          });
+        })();
+      </script>
+    {% else %}
+      <p class="muted">Select a friend to see your conversation.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

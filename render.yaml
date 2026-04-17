@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: myfaceclone
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput
+    startCommand: gunicorn MyFaceclone.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_USE_MANIFEST_STATIC
+        value: "True"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://*.onrender.com

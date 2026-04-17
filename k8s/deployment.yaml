@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myfaceclone-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myfaceclone-web
+  template:
+    metadata:
+      labels:
+        app: myfaceclone-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/your-org/myfaceclone:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              value: MyFaceclone.settings
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: POSTGRES_HOST
+              value: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myfaceclone-web
+spec:
+  selector:
+    app: myfaceclone-web
+  ports:
+    - port: 80
+      targetPort: 8000
+  type: LoadBalancer

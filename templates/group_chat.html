@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="chat-shell glass card slide-up">
+  <aside class="chat-list">
+    <h3>Groups</h3>
+    {% for grp in groups %}
+      <a class="chat-user {% if grp.id == group.id %}active{% endif %}" href="{% url 'group-chat' grp.id %}"># {{ grp.name }}</a>
+    {% endfor %}
+    <a class="chip" href="{% url 'chat' %}">Back to direct chat</a>
+  </aside>
+
+  <section class="chat-main">
+    <header class="chat-header chat-header-actions">
+      <span>Group: {{ group.name }}</span>
+      <button type="button" class="btn btn-ghost" id="start-group-call-btn">Start Group Call</button>
+    </header>
+
+    <div class="chat-thread" data-chat-thread data-current-user="{{ request.user.username }}" data-group-id="{{ group.id }}">
+      {% for msg in group_messages %}
+        <div class="bubble {% if msg.sender_id == request.user.id %}me{% else %}them{% endif %}">
+          <p><strong>@{{ msg.sender.username }}</strong></p>
+          {% if msg.body %}<p>{{ msg.body }}</p>{% endif %}
+          {% if msg.attachment %}<a class="chip" href="{{ msg.attachment.url }}" target="_blank">Open attachment</a>{% endif %}
+          <span>{{ msg.created_at|date:'M d, H:i' }}</span>
+        </div>
+      {% empty %}
+        <p class="muted">No group messages yet.</p>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="{% url 'send-group-message' group.id %}" class="chat-form chat-form-extended" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="text" name="body" maxlength="1000" placeholder="Write to group">
+      <input type="file" name="attachment" accept="image/*,video/*,application/pdf">
+      <button class="btn btn-primary" type="submit">Send</button>
+    </form>
+    <div id="group-call-modal" class="call-modal" style="display:none;">
+      <div class="call-modal-inner glass">
+        <div class="mini-row">
+          <strong>Group Call: {{ group.name }}</strong>
+          <div class="mini-actions">
+            <button type="button" class="btn btn-ghost" id="toggle-audio-btn">Mute Mic</button>
+            <button type="button" class="btn btn-ghost" id="toggle-video-btn">Stop Video</button>
+            <button type="button" class="btn btn-danger" id="end-group-call-btn">End</button>
+          </div>
+        </div>
+        <div class="call-roster-wrap">
+          <strong>Participants</strong>
+          <div id="call-roster" class="call-roster"></div>
+        </div>
+        <div class="call-grid" id="group-call-grid">
+          <video id="group-local-video" autoplay playsinline muted></video>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const thread = document.querySelector('[data-chat-thread]');
+        if (!thread) return;
+
+        const currentUser = thread.dataset.currentUser;
+        const groupId = thread.dataset.groupId;
+        const form = document.querySelector('form[action="{% url 'send-group-message' group.id %}"]');
+        const input = form.querySelector('input[name="body"]');
+        const fileInput = form.querySelector('input[name="attachment"]');
+        const startCallBtn = document.getElementById('start-group-call-btn');
+        const endCallBtn = document.getElementById('end-group-call-btn');
+        const toggleAudioBtn = document.getElementById('toggle-audio-btn');
+        const toggleVideoBtn = document.getElementById('toggle-video-btn');
+        const callModal = document.getElementById('group-call-modal');
+        const groupCallGrid = document.getElementById('group-call-grid');
+        const localVideo = document.getElementById('group-local-video');
+        const rosterEl = document.getElementById('call-roster');
+        const members = JSON.parse('{{ group_member_usernames_json|escapejs }}');
+
+        const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const socket = new WebSocket(`${scheme}://${window.location.host}/ws/group/${groupId}/`);
+        const callSocket = new WebSocket(`${scheme}://${window.location.host}/ws/call/group-${groupId}/`);
+
+        const rtcConfig = { iceServers: {{ webrtc_ice_servers_json|safe }} };
+        const peers = {};
+        const remoteVideos = {};
+        const participantSet = new Set([currentUser]);
+        let localStream = null;
+        let inCall = false;
+        let micEnabled = true;
+        let camEnabled = true;
+
+        const renderRoster = () => {
+          rosterEl.innerHTML = '';
+          Array.from(participantSet).sort().forEach((username) => {
+            const chip = document.createElement('span');
+            chip.className = `chip ${username === currentUser ? 'ok' : ''}`;
+            chip.textContent = username === currentUser ? `@${username} (You)` : `@${username}`;
+            rosterEl.appendChild(chip);
+          });
+        };
+
+        const ensureLocalStream = async () => {
+          if (localStream) return;
+          localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          localVideo.srcObject = localStream;
+        };
+
+        const ensurePeer = async (username, shouldOffer = false) => {
+          if (username === currentUser) return null;
+          if (peers[username]) return peers[username];
+
+          await ensureLocalStream();
+          const pc = new RTCPeerConnection(rtcConfig);
+          peers[username] = pc;
+
+          localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+          participantSet.add(username);
+          renderRoster();
+
+          pc.onicecandidate = (event) => {
+            if (event.candidate && callSocket.readyState === WebSocket.OPEN) {
+              callSocket.send(JSON.stringify({ type: 'ice', target: username, candidate: event.candidate }));
+            }
+          };
+
+          pc.ontrack = (event) => {
+            if (!remoteVideos[username]) {
+              const v = document.createElement('video');
+              v.autoplay = true;
+              v.playsInline = true;
+              v.dataset.peer = username;
+              groupCallGrid.appendChild(v);
+              remoteVideos[username] = v;
+            }
+            remoteVideos[username].srcObject = event.streams[0];
+          };
+
+          if (shouldOffer) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            callSocket.send(JSON.stringify({ type: 'offer', target: username, sdp: offer }));
+          }
+
+          return pc;
+        };
+
+        const closeAllPeers = () => {
+          Object.keys(peers).forEach((u) => {
+            peers[u].close();
+            delete peers[u];
+          });
+          Object.keys(remoteVideos).forEach((u) => {
+            remoteVideos[u].remove();
+            delete remoteVideos[u];
+          });
+          if (localStream) {
+            localStream.getTracks().forEach((t) => t.stop());
+            localStream = null;
+          }
+          localVideo.srcObject = null;
+          participantSet.clear();
+          participantSet.add(currentUser);
+          renderRoster();
+          inCall = false;
+          callModal.style.display = 'none';
+        };
+
+        const addBubble = (msg) => {
+          const wrap = document.createElement('div');
+          const isMe = msg.sender === currentUser;
+          wrap.className = `bubble ${isMe ? 'me' : 'them'}`;
+
+          const sender = document.createElement('p');
+          sender.innerHTML = `<strong>@${msg.sender}</strong>`;
+          wrap.appendChild(sender);
+
+          if (msg.body) {
+            const p = document.createElement('p');
+            p.textContent = msg.body;
+            wrap.appendChild(p);
+          }
+
+          if (msg.attachment) {
+            const a = document.createElement('a');
+            a.className = 'chip';
+            a.href = msg.attachment;
+            a.target = '_blank';
+            a.textContent = 'Open attachment';
+            wrap.appendChild(a);
+          }
+
+          const meta = document.createElement('span');
+          meta.textContent = msg.created_at;
+          wrap.appendChild(meta);
+          thread.appendChild(wrap);
+          thread.scrollTop = thread.scrollHeight;
+        };
+
+        socket.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type === 'message' && data.message.sender !== currentUser) {
+            addBubble(data.message);
+          }
+        };
+
+        startCallBtn.addEventListener('click', async () => {
+          callModal.style.display = 'grid';
+          inCall = true;
+          renderRoster();
+          await ensureLocalStream();
+          if (callSocket.readyState === WebSocket.OPEN) {
+            callSocket.send(JSON.stringify({ type: 'join' }));
+          }
+
+          members.filter((m) => m !== currentUser).forEach(async (m) => {
+            await ensurePeer(m, true);
+          });
+        });
+
+        endCallBtn.addEventListener('click', () => {
+          if (callSocket.readyState === WebSocket.OPEN) {
+            callSocket.send(JSON.stringify({ type: 'hangup' }));
+          }
+          closeAllPeers();
+        });
+
+        toggleAudioBtn.addEventListener('click', () => {
+          if (!localStream) return;
+          micEnabled = !micEnabled;
+          localStream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
+          toggleAudioBtn.textContent = micEnabled ? 'Mute Mic' : 'Unmute Mic';
+        });
+
+        toggleVideoBtn.addEventListener('click', () => {
+          if (!localStream) return;
+          camEnabled = !camEnabled;
+          localStream.getVideoTracks().forEach((t) => { t.enabled = camEnabled; });
+          toggleVideoBtn.textContent = camEnabled ? 'Stop Video' : 'Start Video';
+        });
+
+        callSocket.onmessage = async (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type !== 'call' || data.sender === currentUser) return;
+          const payload = data.payload;
+
+          if (payload.type === 'join' && inCall) {
+            await ensurePeer(data.sender, true);
+          }
+
+          if (payload.type === 'offer') {
+            callModal.style.display = 'grid';
+            inCall = true;
+            const pc = await ensurePeer(data.sender, false);
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            callSocket.send(JSON.stringify({ type: 'answer', target: data.sender, sdp: answer }));
+          }
+
+          if (payload.type === 'answer') {
+            const pc = await ensurePeer(data.sender, false);
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+          }
+
+          if (payload.type === 'ice' && payload.candidate) {
+            const pc = await ensurePeer(data.sender, false);
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            } catch (err) {
+              console.error('group ICE error', err);
+            }
+          }
+
+          if (payload.type === 'hangup' || payload.type === 'leave') {
+            if (payload.type === 'hangup') {
+              closeAllPeers();
+            } else if (peers[data.sender]) {
+              peers[data.sender].close();
+              delete peers[data.sender];
+              if (remoteVideos[data.sender]) {
+                remoteVideos[data.sender].remove();
+                delete remoteVideos[data.sender];
+              }
+              participantSet.delete(data.sender);
+              renderRoster();
+            }
+          }
+        };
+
+        form.addEventListener('submit', (e) => {
+          if (fileInput.files.length > 0) {
+            return;
+          }
+          const body = input.value.trim();
+          if (!body || socket.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          e.preventDefault();
+          socket.send(JSON.stringify({ type: 'message', body }));
+          addBubble({ sender: currentUser, body, created_at: 'now' });
+          input.value = '';
+        });
+      })();
+    </script>
+  </section>
+</div>
+{% endblock %}

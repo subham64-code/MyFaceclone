@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="glass card slide-up">
+  <h2>Saved posts</h2>
+  {% for post in posts %}
+    <article class="glass card post-card">
+      <div class="post-head">
+        <a href="{% url 'profile-user' post.user.username %}">@{{ post.user.username }}</a>
+        <span class="muted">{{ post.date|date:'M d, Y H:i' }}</span>
+      </div>
+      {% if post.post %}<p>{{ post.post }}</p>{% endif %}
+      {% if post.image %}<img class="post-image" src="{{ post.image.url }}" alt="post image">{% endif %}
+      {% if post.video %}<video class="post-image" controls muted src="{{ post.video.url }}"></video>{% endif %}
+      <div class="post-actions">
+        <a class="chip" href="{% url 'toggle-save-post' post.id %}">Unsave</a>
+        <a class="chip" href="{% url 'toggle-like' post.id %}">Like ({{ post.likes.count }})</a>
+      </div>
+    </article>
+  {% empty %}
+    <p class="muted">You have no saved posts yet.</p>
+  {% endfor %}
+</section>
+{% endblock %}
