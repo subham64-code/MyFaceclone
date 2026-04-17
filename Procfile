@@ -1,1 +1,1 @@
-web: gunicorn MyFaceclone.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+web: uvicorn MyFaceclone.asgi:application --host 0.0.0.0 --port $PORT
