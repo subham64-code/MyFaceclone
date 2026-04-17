@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ profile_user.get_full_name|default:profile_user.username }} – MyFaceClone{% endblock %}
+
+{% block content %}
+<div class="profile-page">
+    <!-- Cover Photo -->
+    <div class="profile-cover-wrap">
+        {% if profile.cover_photo %}
+            <img src="{{ profile.cover_photo.url }}" alt="cover" class="profile-cover" />
+        {% else %}
+            <div class="profile-cover profile-cover-default"></div>
+        {% endif %}
+
+        <!-- Profile Avatar -->
+        <div class="profile-avatar-wrap">
+            {% if profile.avatar %}
+                <img src="{{ profile.avatar.url }}" alt="avatar" class="profile-big-avatar" />
+            {% else %}
+                <span class="profile-big-avatar default-avatar-lg">
+                    {{ profile_user.first_name|first|upper }}{{ profile_user.last_name|first|upper }}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Profile info -->
+    <div class="profile-info-bar card">
+        <div class="profile-identity">
+            <h1 class="profile-name">{{ profile_user.get_full_name|default:profile_user.username }}</h1>
+            {% if profile.bio %}
+                <p class="profile-bio">{{ profile.bio }}</p>
+            {% endif %}
+        </div>
+        <div class="profile-actions">
+            {% if profile_user == user %}
+                <button class="btn-secondary">
+                    <i class="fa fa-edit"></i> Edit Profile
+                </button>
+            {% elif friend_status == 'accepted' %}
+                <button class="btn-secondary">
+                    <i class="fa fa-user-check"></i> Friends
+                </button>
+            {% elif friend_status == 'pending' %}
+                <button class="btn-secondary" disabled>
+                    <i class="fa fa-clock"></i> Request Sent
+                </button>
+            {% elif friend_status == 'received' %}
+                <button class="btn-primary">
+                    <i class="fa fa-user-plus"></i> Respond to Request
+                </button>
+            {% else %}
+                <form method="post" action="{% url 'send_friend_request' profile_user.id %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-primary">
+                        <i class="fa fa-user-plus"></i> Add Friend
+                    </button>
+                </form>
+            {% endif %}
+            <button class="btn-secondary">
+                <i class="fa fa-comment"></i> Message
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="profile-tabs card">
+        <a href="#" class="profile-tab active">Posts</a>
+        <a href="#" class="profile-tab">About</a>
+        <a href="#" class="profile-tab">Friends</a>
+        <a href="#" class="profile-tab">Photos</a>
+    </div>
+
+    <!-- Profile content -->
+    <div class="profile-content">
+        <!-- Left -->
+        <div class="profile-sidebar">
+            <div class="card profile-about-card">
+                <h3>Intro</h3>
+                {% if profile.bio %}
+                    <p>{{ profile.bio }}</p>
+                {% else %}
+                    <p class="empty-text">No bio yet.</p>
+                {% endif %}
+                {% if profile.location %}
+                    <p><i class="fa fa-map-marker-alt"></i> {{ profile.location }}</p>
+                {% endif %}
+                {% if profile.website %}
+                    <p><i class="fa fa-link"></i>
+                        <a href="{{ profile.website }}" target="_blank" rel="noopener">{{ profile.website }}</a>
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Right: posts -->
+        <div class="profile-posts">
+            {% if profile_user == user %}
+            <div class="post-composer card">
+                <div class="composer-top">
+                    {% if user.profile.avatar %}
+                        <img src="{{ user.profile.avatar.url }}" alt="avatar" class="composer-avatar" />
+                    {% else %}
+                        <span class="composer-avatar default-avatar">{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}</span>
+                    {% endif %}
+                    <button class="composer-input-btn" id="open-post-modal">
+                        What's on your mind, {{ user.first_name|default:user.username }}?
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+
+            {% for post in posts %}
+            <article class="post card" id="post-{{ post.id }}">
+                <div class="post-header">
+                    <a href="{% url 'profile' post.author.username %}">
+                        {% if post.author.profile.avatar %}
+                            <img src="{{ post.author.profile.avatar.url }}" alt="avatar" class="post-avatar" />
+                        {% else %}
+                            <span class="post-avatar default-avatar">{{ post.author.first_name|first|upper }}{{ post.author.last_name|first|upper }}</span>
+                        {% endif %}
+                    </a>
+                    <div class="post-meta">
+                        <a href="{% url 'profile' post.author.username %}" class="post-author-name">
+                            {{ post.author.get_full_name|default:post.author.username }}
+                        </a>
+                        <span class="post-time">{{ post.created_at|date:"M d, Y" }}</span>
+                    </div>
+                </div>
+                {% if post.content %}
+                    <p class="post-content">{{ post.content }}</p>
+                {% endif %}
+                {% if post.image %}
+                    <img src="{{ post.image.url }}" alt="post image" class="post-image" />
+                {% endif %}
+                <div class="post-stats">
+                    <span class="post-stat-likes">
+                        <span class="reaction-icon">👍</span>
+                        <span id="like-count-{{ post.id }}">{{ post.like_count }}</span>
+                    </span>
+                    <span class="post-stat-comments">
+                        <span id="comment-count-{{ post.id }}">{{ post.comment_count }}</span> comments
+                    </span>
+                </div>
+                <hr class="divider" />
+                <div class="post-actions">
+                    <button class="post-action-btn like-btn {% if post.id in user_liked_posts %}liked{% endif %}"
+                            data-post-id="{{ post.id }}"
+                            data-csrf="{{ csrf_token }}">
+                        <i class="{% if post.id in user_liked_posts %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                        <span>{% if post.id in user_liked_posts %}Liked{% else %}Like{% endif %}</span>
+                    </button>
+                    <button class="post-action-btn comment-toggle-btn" data-post-id="{{ post.id }}">
+                        <i class="far fa-comment"></i> <span>Comment</span>
+                    </button>
+                    <button class="post-action-btn">
+                        <i class="fa fa-share"></i> <span>Share</span>
+                    </button>
+                </div>
+                <div class="comment-section hidden" id="comments-{{ post.id }}">
+                    <div class="comments-list" id="comments-list-{{ post.id }}">
+                        {% for comment in post.comments.all %}
+                        <div class="comment">
+                            <span class="comment-avatar default-avatar">{{ comment.author.first_name|first|upper }}{{ comment.author.last_name|first|upper }}</span>
+                            <div class="comment-bubble">
+                                <span class="comment-author">{{ comment.author.get_full_name|default:comment.author.username }}</span>
+                                <p class="comment-content">{{ comment.content }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="comment-input-row">
+                        <span class="comment-avatar default-avatar">{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}</span>
+                        <div class="comment-input-wrap">
+                            <input type="text" class="comment-input" placeholder="Write a comment…"
+                                   data-post-id="{{ post.id }}" data-csrf="{{ csrf_token }}" />
+                        </div>
+                    </div>
+                </div>
+            </article>
+            {% empty %}
+            <div class="card empty-feed">
+                <i class="fa fa-newspaper empty-icon"></i>
+                <p>No posts yet.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

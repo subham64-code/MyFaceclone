@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}MyFaceClone – Home{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block content %}
+<div class="page-layout">
+    <!-- Left Sidebar -->
+    <aside class="sidebar sidebar-left">
+        <a href="{% url 'my_profile' %}" class="sidebar-profile-link">
+            {% if user.profile.avatar %}
+                <img src="{{ user.profile.avatar.url }}" alt="avatar" class="sidebar-avatar" />
+            {% else %}
+                <span class="sidebar-avatar default-avatar">{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}</span>
+            {% endif %}
+            <span class="sidebar-username">{{ user.get_full_name|default:user.username }}</span>
+        </a>
+
+        <nav class="sidebar-nav">
+            <a href="#" class="sidebar-link">
+                <i class="fa fa-user-friends sidebar-icon"></i> Friends
+            </a>
+            <a href="#" class="sidebar-link">
+                <i class="fa fa-users sidebar-icon"></i> Groups
+            </a>
+            <a href="#" class="sidebar-link">
+                <i class="fa fa-play-circle sidebar-icon"></i> Watch
+            </a>
+            <a href="#" class="sidebar-link">
+                <i class="fa fa-store sidebar-icon"></i> Marketplace
+            </a>
+            <a href="#" class="sidebar-link">
+                <i class="fa fa-calendar sidebar-icon"></i> Events
+            </a>
+            <a href="#" class="sidebar-link">
+                <i class="fa fa-bookmark sidebar-icon"></i> Saved
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Feed -->
+    <section class="feed">
+        <!-- Post Composer -->
+        <div class="post-composer card">
+            <div class="composer-top">
+                {% if user.profile.avatar %}
+                    <img src="{{ user.profile.avatar.url }}" alt="avatar" class="composer-avatar" />
+                {% else %}
+                    <span class="composer-avatar default-avatar">{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}</span>
+                {% endif %}
+                <button class="composer-input-btn" id="open-post-modal">
+                    What's on your mind, {{ user.first_name|default:user.username }}?
+                </button>
+            </div>
+            <hr class="divider" />
+            <div class="composer-actions">
+                <button class="composer-action-btn" id="open-post-modal-photo">
+                    <i class="fa fa-images" style="color:#45bd62;"></i> Photo/Video
+                </button>
+                <button class="composer-action-btn" id="open-post-modal-feeling">
+                    <i class="fa fa-smile" style="color:#f7b928;"></i> Feeling/Activity
+                </button>
+            </div>
+        </div>
+
+        <!-- Posts Feed -->
+        {% for post in posts %}
+        <article class="post card" id="post-{{ post.id }}">
+            <div class="post-header">
+                <a href="{% url 'profile' post.author.username %}">
+                    {% if post.author.profile.avatar %}
+                        <img src="{{ post.author.profile.avatar.url }}" alt="avatar" class="post-avatar" />
+                    {% else %}
+                        <span class="post-avatar default-avatar">{{ post.author.first_name|first|upper }}{{ post.author.last_name|first|upper }}</span>
+                    {% endif %}
+                </a>
+                <div class="post-meta">
+                    <a href="{% url 'profile' post.author.username %}" class="post-author-name">
+                        {{ post.author.get_full_name|default:post.author.username }}
+                    </a>
+                    <span class="post-time">{{ post.created_at|date:"M d, Y" }}</span>
+                </div>
+                <button class="post-options-btn"><i class="fa fa-ellipsis-h"></i></button>
+            </div>
+
+            {% if post.content %}
+                <p class="post-content">{{ post.content }}</p>
+            {% endif %}
+            {% if post.image %}
+                <img src="{{ post.image.url }}" alt="post image" class="post-image" />
+            {% endif %}
+
+            <!-- Reactions bar -->
+            <div class="post-stats">
+                <span class="post-stat-likes">
+                    <span class="reaction-icon">👍</span>
+                    <span id="like-count-{{ post.id }}">{{ post.like_count }}</span>
+                </span>
+                <span class="post-stat-comments">
+                    <span id="comment-count-{{ post.id }}">{{ post.comment_count }}</span> comments
+                </span>
+            </div>
+
+            <hr class="divider" />
+
+            <!-- Action buttons -->
+            <div class="post-actions">
+                <button class="post-action-btn like-btn {% if post.id in user_liked_posts %}liked{% endif %}"
+                        data-post-id="{{ post.id }}"
+                        data-csrf="{{ csrf_token }}">
+                    <i class="{% if post.id in user_liked_posts %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                    <span>{% if post.id in user_liked_posts %}Liked{% else %}Like{% endif %}</span>
+                </button>
+                <button class="post-action-btn comment-toggle-btn" data-post-id="{{ post.id }}">
+                    <i class="far fa-comment"></i> <span>Comment</span>
+                </button>
+                <button class="post-action-btn">
+                    <i class="fa fa-share"></i> <span>Share</span>
+                </button>
+            </div>
+
+            <!-- Comment section -->
+            <div class="comment-section hidden" id="comments-{{ post.id }}">
+                <div class="comments-list" id="comments-list-{{ post.id }}">
+                    {% for comment in post.comments.all %}
+                    <div class="comment">
+                        <a href="{% url 'profile' comment.author.username %}">
+                            {% if comment.author.profile.avatar %}
+                                <img src="{{ comment.author.profile.avatar.url }}" alt="avatar" class="comment-avatar" />
+                            {% else %}
+                                <span class="comment-avatar default-avatar">{{ comment.author.first_name|first|upper }}{{ comment.author.last_name|first|upper }}</span>
+                            {% endif %}
+                        </a>
+                        <div class="comment-bubble">
+                            <span class="comment-author">{{ comment.author.get_full_name|default:comment.author.username }}</span>
+                            <p class="comment-content">{{ comment.content }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="comment-input-row">
+                    {% if user.profile.avatar %}
+                        <img src="{{ user.profile.avatar.url }}" alt="avatar" class="comment-avatar" />
+                    {% else %}
+                        <span class="comment-avatar default-avatar">{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}</span>
+                    {% endif %}
+                    <div class="comment-input-wrap">
+                        <input type="text" class="comment-input" placeholder="Write a comment…"
+                               data-post-id="{{ post.id }}" data-csrf="{{ csrf_token }}" />
+                    </div>
+                </div>
+            </div>
+        </article>
+        {% empty %}
+        <div class="card empty-feed">
+            <i class="fa fa-newspaper empty-icon"></i>
+            <p>No posts yet. Be the first to share something!</p>
+        </div>
+        {% endfor %}
+    </section>
+
+    <!-- Right Sidebar -->
+    <aside class="sidebar sidebar-right">
+        <!-- Friend requests -->
+        {% with pending_requests=user.received_requests.all %}
+        {% if pending_requests %}
+        <div class="sidebar-section">
+            <h3 class="sidebar-section-title">Friend Requests</h3>
+            {% for freq in pending_requests %}
+            {% if freq.status == 'pending' %}
+            <div class="friend-request-card">
+                <a href="{% url 'profile' freq.sender.username %}">
+                    {% if freq.sender.profile.avatar %}
+                        <img src="{{ freq.sender.profile.avatar.url }}" alt="avatar" class="suggestion-avatar" />
+                    {% else %}
+                        <span class="suggestion-avatar default-avatar">{{ freq.sender.first_name|first|upper }}{{ freq.sender.last_name|first|upper }}</span>
+                    {% endif %}
+                </a>
+                <div class="friend-req-info">
+                    <a href="{% url 'profile' freq.sender.username %}" class="suggestion-name">
+                        {{ freq.sender.get_full_name|default:freq.sender.username }}
+                    </a>
+                    <div class="friend-req-actions">
+                        <form method="post" action="{% url 'respond_friend_request' freq.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="accept" />
+                            <button type="submit" class="btn-primary btn-sm">Confirm</button>
+                        </form>
+                        <form method="post" action="{% url 'respond_friend_request' freq.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="reject" />
+                            <button type="submit" class="btn-secondary btn-sm">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- People you may know -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-header">
+                <h3 class="sidebar-section-title">People You May Know</h3>
+                <a href="#" class="sidebar-section-link">See All</a>
+            </div>
+            {% for suggestion in suggestions %}
+            <div class="suggestion-card">
+                <a href="{% url 'profile' suggestion.username %}">
+                    {% if suggestion.profile.avatar %}
+                        <img src="{{ suggestion.profile.avatar.url }}" alt="avatar" class="suggestion-avatar" />
+                    {% else %}
+                        <span class="suggestion-avatar default-avatar">{{ suggestion.first_name|first|upper }}{{ suggestion.last_name|first|upper }}</span>
+                    {% endif %}
+                </a>
+                <div class="suggestion-info">
+                    <a href="{% url 'profile' suggestion.username %}" class="suggestion-name">
+                        {{ suggestion.get_full_name|default:suggestion.username }}
+                    </a>
+                    <form method="post" action="{% url 'send_friend_request' suggestion.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-secondary btn-sm btn-add-friend">
+                            <i class="fa fa-user-plus"></i> Add Friend
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% empty %}
+            <p class="empty-suggestions">No suggestions right now.</p>
+            {% endfor %}
+        </div>
+
+        <!-- Contacts -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-header">
+                <h3 class="sidebar-section-title">Contacts</h3>
+                <div class="contacts-icons">
+                    <button class="contacts-icon-btn"><i class="fa fa-video"></i></button>
+                    <button class="contacts-icon-btn"><i class="fa fa-search"></i></button>
+                    <button class="contacts-icon-btn"><i class="fa fa-ellipsis-h"></i></button>
+                </div>
+            </div>
+            <p class="empty-suggestions">No contacts yet.</p>
+        </div>
+    </aside>
+</div>
+
+<!-- Create Post Modal -->
+<div class="modal-overlay hidden" id="post-modal">
+    <div class="modal post-modal-box">
+        <div class="modal-header">
+            <h2>Create Post</h2>
+            <button class="modal-close" id="close-post-modal">&times;</button>
+        </div>
+        <div class="modal-author">
+            {% if user.profile.avatar %}
+                <img src="{{ user.profile.avatar.url }}" alt="avatar" class="composer-avatar" />
+            {% else %}
+                <span class="composer-avatar default-avatar">{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}</span>
+            {% endif %}
+            <div>
+                <strong>{{ user.get_full_name|default:user.username }}</strong>
+                <span class="post-audience"><i class="fa fa-globe-americas"></i> Public ▾</span>
+            </div>
+        </div>
+        <form method="post" action="{% url 'create_post' %}" enctype="multipart/form-data" id="create-post-form">
+            {% csrf_token %}
+            <textarea name="content" id="post-textarea"
+                      placeholder="What's on your mind, {{ user.first_name|default:user.username }}?"></textarea>
+            <div id="image-preview-wrap" class="hidden">
+                <img id="image-preview" src="" alt="preview" class="post-image-preview" />
+                <button type="button" class="remove-image-btn" id="remove-image">&times;</button>
+            </div>
+            <div class="post-modal-actions">
+                <span class="attach-label">Add to your post:</span>
+                <label class="attach-btn" for="post-image-input" title="Photo/Video">
+                    <i class="fa fa-images" style="color:#45bd62;"></i>
+                </label>
+                <input type="file" id="post-image-input" name="image"
+                       accept="image/*,video/*" class="hidden" />
+                <label class="attach-btn" title="Feeling/Activity">
+                    <i class="fa fa-smile" style="color:#f7b928;"></i>
+                </label>
+                <label class="attach-btn" title="Check in">
+                    <i class="fa fa-map-marker-alt" style="color:#f5533d;"></i>
+                </label>
+            </div>
+            <button type="submit" class="btn-primary btn-full post-submit-btn" id="post-submit-btn" disabled>
+                Post
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

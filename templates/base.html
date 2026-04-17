@@ -1,0 +1,87 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}MyFaceClone{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <!-- Top Navbar -->
+    <nav class="navbar">
+        <div class="navbar-left">
+            <a href="{% url 'home' %}" class="navbar-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" fill="#fff"
+                     height="40" width="40">
+                    <path d="M20.18 35.86C28.93 34.4 35.5 26.87 35.5 17.75
+                             17.75a17.75 17.75 0 1 0-17.75 17.75c.98 0
+                             1.95-.07 2.91-.2V22.18h-3.6v-4.43h3.6v-3.38
+                             c0-3.56 2.11-5.53 5.37-5.53 1.56 0 3.19.28
+                             3.19.28v3.5h-1.8c-1.77 0-2.32 1.1-2.32
+                             2.22v2.91h3.95l-.63 4.43h-3.32v11.18z"/>
+                </svg>
+                <span class="logo-text">MyFaceClone</span>
+            </a>
+            <div class="search-bar">
+                <i class="fa fa-search search-icon"></i>
+                <input type="text" placeholder="Search MyFaceClone" id="search-input" />
+            </div>
+        </div>
+        <div class="navbar-center">
+            <a href="{% url 'home' %}" class="nav-icon-btn {% block nav_home %}{% endblock %}" title="Home">
+                <i class="fa fa-home"></i>
+            </a>
+            <a href="#" class="nav-icon-btn" title="Friends">
+                <i class="fa fa-user-friends"></i>
+            </a>
+            <a href="#" class="nav-icon-btn" title="Watch">
+                <i class="fa fa-play-circle"></i>
+            </a>
+            <a href="#" class="nav-icon-btn" title="Marketplace">
+                <i class="fa fa-store"></i>
+            </a>
+            <a href="#" class="nav-icon-btn" title="Groups">
+                <i class="fa fa-users"></i>
+            </a>
+        </div>
+        <div class="navbar-right">
+            <a href="{% url 'my_profile' %}" class="navbar-avatar-link" title="Profile">
+                {% if user.profile.avatar %}
+                    <img src="{{ user.profile.avatar.url }}" alt="avatar" class="navbar-avatar" />
+                {% else %}
+                    <span class="navbar-avatar default-avatar">{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}</span>
+                {% endif %}
+                <span class="nav-username">{{ user.get_full_name|default:user.username }}</span>
+            </a>
+            <button class="nav-icon-btn" title="Messenger"><i class="fa fa-comment-dots"></i></button>
+            <button class="nav-icon-btn" title="Notifications" id="notif-btn">
+                <i class="fa fa-bell"></i>
+            </button>
+            <a href="{% url 'logout' %}" class="nav-icon-btn" title="Logout">
+                <i class="fa fa-sign-out-alt"></i>
+            </a>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="main-content">
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message message-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{% static 'js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

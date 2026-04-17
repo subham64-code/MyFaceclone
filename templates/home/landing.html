@@ -1,0 +1,129 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyFaceClone – Connect with friends</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body class="landing-body">
+    <div class="landing-container">
+        <!-- Left side: branding -->
+        <div class="landing-left">
+            <div class="landing-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" fill="#1877f2"
+                     height="80" width="80">
+                    <path d="M35.5 18A17.5 17.5 0 1 0 14.81
+                             35.27V23.18H10.5V18h4.31v-3.74c0-4.25
+                             2.54-6.6 6.41-6.6 1.86 0 3.8.33
+                             3.8.33v4.17h-2.14c-2.11 0-2.77
+                             1.31-2.77 2.65V18h4.72l-.75 5.18H20.1
+                             v12.09A17.51 17.51 0 0 0 35.5 18z"/>
+                </svg>
+                <h1 class="landing-brand">MyFaceClone</h1>
+            </div>
+            <p class="landing-tagline">
+                Connect with friends and the world around you on MyFaceClone.
+            </p>
+        </div>
+
+        <!-- Right side: auth forms -->
+        <div class="landing-right">
+            <!-- Login form -->
+            <div class="login-card">
+                <form method="post" action="{% url 'login' %}" id="login-form">
+                    {% csrf_token %}
+                    {% if login_error %}
+                        <p class="form-error">{{ login_error }}</p>
+                    {% endif %}
+                    <input type="email" name="email" placeholder="Email address or phone number"
+                           class="auth-input" required autocomplete="email" />
+                    <input type="password" name="password" placeholder="Password"
+                           class="auth-input" required autocomplete="current-password" />
+                    <button type="submit" class="btn-primary btn-full">Log in</button>
+                </form>
+                <a href="#" class="forgot-password">Forgot password?</a>
+                <hr class="divider" />
+                <div class="signup-prompt">
+                    <button class="btn-success btn-signup-open" id="open-signup">
+                        Create new account
+                    </button>
+                </div>
+            </div>
+
+            <p class="landing-footer">
+                <strong>Create a Page</strong> for a celebrity, brand or business.
+            </p>
+        </div>
+    </div>
+
+    <!-- Sign-up modal -->
+    <div class="modal-overlay hidden" id="signup-modal">
+        <div class="modal signup-modal-box">
+            <div class="modal-header">
+                <h2>Create a new account</h2>
+                <p class="modal-subtext">It's quick and easy.</p>
+                <button class="modal-close" id="close-signup">&times;</button>
+            </div>
+            <form method="post" action="{% url 'signup' %}" id="signup-form">
+                {% csrf_token %}
+                {% if signup_error %}
+                    <p class="form-error">{{ signup_error }}</p>
+                {% endif %}
+                <div class="form-row">
+                    <input type="text" name="first_name" placeholder="First name"
+                           class="auth-input half" required />
+                    <input type="text" name="last_name" placeholder="Last name"
+                           class="auth-input half" required />
+                </div>
+                <input type="email" name="email" placeholder="Mobile number or email address"
+                       class="auth-input" required autocomplete="email" />
+                <input type="password" name="password" placeholder="New password"
+                       class="auth-input" required autocomplete="new-password" />
+                <div class="form-group">
+                    <label class="form-label">Date of birth</label>
+                    <input type="date" name="birthday" class="auth-input" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Gender</label>
+                    <div class="gender-options">
+                        <label class="gender-option">
+                            <input type="radio" name="gender" value="female" /> Female
+                        </label>
+                        <label class="gender-option">
+                            <input type="radio" name="gender" value="male" /> Male
+                        </label>
+                        <label class="gender-option">
+                            <input type="radio" name="gender" value="other" /> Other
+                        </label>
+                    </div>
+                </div>
+                <p class="signup-disclaimer">
+                    By clicking Sign Up, you agree to our <a href="#">Terms</a>,
+                    <a href="#">Privacy Policy</a> and <a href="#">Cookies Policy</a>.
+                </p>
+                <div class="modal-footer">
+                    <button type="submit" class="btn-success btn-full">Sign Up</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{% static 'js/main.js' %}"></script>
+    <script>
+        document.getElementById('open-signup').addEventListener('click', function () {
+            document.getElementById('signup-modal').classList.remove('hidden');
+        });
+        document.getElementById('close-signup').addEventListener('click', function () {
+            document.getElementById('signup-modal').classList.add('hidden');
+        });
+        {% if signup_error %}
+            document.getElementById('signup-modal').classList.remove('hidden');
+        {% endif %}
+    </script>
+</body>
+</html>
